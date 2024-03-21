@@ -141,7 +141,7 @@ resource "aws_cloudfront_distribution" "this" {
 
       cache_policy_id            = try(i.value.cache_policy_id, data.aws_cloudfront_cache_policy.this[i.value.cache_policy_name].id, null)
       origin_request_policy_id   = try(i.value.origin_request_policy_id, data.aws_cloudfront_origin_request_policy.this[i.value.origin_request_policy_name].id, null)
-      response_headers_policy_id = try(i.value.response_headers_policy_id, data.aws_cloudfront_response_headers_policy.this[i.value.response_headers_policy_name].id, null)
+      response_headers_policy_id = try(i.value.response_headers_policy_id, aws_cloudfront_response_headers_policy.this[i.value.response_headers_policy_name].id, data.aws_cloudfront_response_headers_policy.this[i.value.response_headers_policy_name].id, null)
 
       realtime_log_config_arn = lookup(i.value, "realtime_log_config_arn", null)
 
@@ -206,7 +206,7 @@ resource "aws_cloudfront_distribution" "this" {
 
       cache_policy_id            = try(i.value.cache_policy_id, data.aws_cloudfront_cache_policy.this[i.value.cache_policy_name].id, null)
       origin_request_policy_id   = try(i.value.origin_request_policy_id, data.aws_cloudfront_origin_request_policy.this[i.value.origin_request_policy_name].id, null)
-      response_headers_policy_id = try(i.value.response_headers_policy_id, data.aws_cloudfront_response_headers_policy.this[i.value.response_headers_policy_name].id, null)
+      response_headers_policy_id = try(i.value.response_headers_policy_id, aws_cloudfront_response_headers_policy.this[i.value.response_headers_policy_name].id, data.aws_cloudfront_response_headers_policy.this[i.value.response_headers_policy_name].id, null)
 
       realtime_log_config_arn = lookup(i.value, "realtime_log_config_arn", null)
 
@@ -313,4 +313,124 @@ data "aws_cloudfront_response_headers_policy" "this" {
   for_each = toset([for v in concat([var.default_cache_behavior], var.ordered_cache_behavior) : v.response_headers_policy_name if can(v.response_headers_policy_name)])
 
   name = each.key
+}
+
+resource "aws_cloudfront_response_headers_policy" "this" {
+  for_each = var.response_headers_policies
+
+  name    = each.key
+  comment = lookup(each.value, "comment", null)
+
+  dynamic "cors_config" {
+    for_each = length(lookup(each.value, "cors_config", "")) == 0 ? [] : [1]
+
+    content {
+      access_control_allow_credentials = lookup(each.value.cors_config, "access_control_allow_credentials", null)
+
+      access_control_allow_headers {
+        items = lookup(each.value.cors_config, "access_control_allow_headers", [])
+      }
+
+      access_control_allow_origins {
+        items = lookup(each.value.cors_config, "access_control_allow_origins", [])
+      }
+
+      access_control_allow_methods {
+        items = lookup(each.value.cors_config, "access_control_allow_methods", [])
+      }
+
+      origin_override = lookup(each.value.cors_config, "origin_override", null)
+    }
+  }
+
+  dynamic "custom_headers_config" {
+    for_each = length(lookup(each.value, "custom_headers_config", "")) == 0 ? [] : [1]
+
+    content {
+      dynamic "items" {
+        for_each = lookup(each.value, "custom_headers_config")
+
+        content {
+          header   = lookup(items.value, "header")
+          override = lookup(items.value, "override")
+          value    = lookup(items.value, "value")
+        }
+      }
+    }
+  }
+
+  dynamic "remove_headers_config" {
+    for_each = length(lookup(each.value, "remove_headers_config", "")) == 0 ? [] : [1]
+
+    content {
+      dynamic "items" {
+        for_each = lookup(each.value, "remove_headers_config")
+
+        content {
+          header = items.value
+        }
+      }
+    }
+  }
+
+  dynamic "security_headers_config" {
+    for_each = length(lookup(each.value, "security_headers_config", "")) == 0 ? [] : [1]
+
+    content {
+      dynamic "content_security_policy" {
+        for_each = can(lookup(each.value.security_headers_config, "content_security_policy")) ? [1] : []
+
+        content {
+          content_security_policy = lookup(each.value.security_headers_config.content_security_policy, "content_security_policy")
+          override                = lookup(each.value.security_headers_config.content_security_policy, "override")
+        }
+      }
+      dynamic "content_type_options" {
+        for_each = can(lookup(each.value.security_headers_config, "content_type_options")) ? [1] : []
+        content {
+          override = lookup(each.value.security_headers_config.content_type_options, "override")
+        }
+      }
+      dynamic "frame_options" {
+        for_each = can(lookup(each.value.security_headers_config, "frame_options")) ? [1] : []
+        content {
+          frame_option = lookup(each.value.security_headers_config.frame_options, "frame_option")
+          override     = lookup(each.value.security_headers_config.frame_options, "override")
+        }
+      }
+      dynamic "referrer_policy" {
+        for_each = can(lookup(each.value.security_headers_config, "referrer_policy")) ? [1] : []
+        content {
+          referrer_policy = lookup(each.value.security_headers_config.referrer_policy, "referrer_policy")
+          override        = lookup(each.value.security_headers_config.referrer_policy, "override")
+        }
+      }
+      dynamic "strict_transport_security" {
+        for_each = can(lookup(each.value.security_headers_config, "strict_transport_security")) ? [1] : []
+        content {
+          access_control_max_age_sec = lookup(each.value.security_headers_config.strict_transport_security, "access_control_max_age_sec")
+          include_subdomains         = lookup(each.value.security_headers_config.strict_transport_security, "include_subdomains", null)
+          preload                    = lookup(each.value.security_headers_config.strict_transport_security, "preload", null)
+          override                   = lookup(each.value.security_headers_config.strict_transport_security, "override")
+        }
+      }
+      dynamic "xss_protection" {
+        for_each = can(lookup(each.value.security_headers_config, "xss_protection")) ? [1] : []
+        content {
+          mode_block = lookup(each.value.security_headers_config.xss_protection, "mode_block", null)
+          protection = lookup(each.value.security_headers_config.xss_protection, "protection")
+          report_uri = lookup(each.value.security_headers_config.xss_protection, "report_uri", null)
+          override   = lookup(each.value.security_headers_config.xss_protection, "override")
+        }
+      }
+    }
+  }
+
+  dynamic "server_timing_headers_config" {
+    for_each = can(lookup(each.value, "server_timing_headers_config")) ? [1] : []
+    content {
+      enabled       = lookup(each.value.server_timing_headers_config, "enabled")
+      sampling_rate = lookup(each.value.server_timing_headers_config, "sampling_rate")
+    }
+  }
 }

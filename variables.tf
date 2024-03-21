@@ -181,3 +181,9 @@ variable "realtime_metrics_subscription_status" {
   type        = string
   default     = "Enabled"
 }
+
+variable "response_headers_policies" {
+  description = "One or more response header policies to create (multiples allowed)."
+  type        = any
+  default     = {}
+}
